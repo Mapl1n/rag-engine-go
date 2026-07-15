@@ -102,7 +102,9 @@ textarea{min-height:80px}
 </div>
 
 <script>
-const API='/api';
+// Auto-detect basePath: /api (direct) or /s1/api (via reverse proxy)
+var bp=window.location.pathname.replace(/\/+$/,'');
+const API=(bp===''||bp==='/')?'/api':bp+'/api';
 let status={tika:false,ollama:false,qa:false};
 
 fetch(API+'/health').then(r=>r.json()).then(d=>{
