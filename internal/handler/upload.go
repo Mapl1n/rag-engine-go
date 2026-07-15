@@ -65,6 +65,16 @@ func (h *UploadHandler) ListDocs(c *gin.Context) {
 	response.OK(c, list)
 }
 
+// DeleteDoc 删除文档
+func (h *UploadHandler) DeleteDoc(c *gin.Context) {
+	docID := c.Param("doc_id")
+	if err := h.docService.DeleteDoc(docID); err != nil {
+		response.Error(c, http.StatusNotFound, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"message": "deleted"})
+}
+
 // Stats 系统统计
 func (h *UploadHandler) Stats(c *gin.Context) {
 	response.OK(c, h.docService.Stats())

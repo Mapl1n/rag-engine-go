@@ -194,6 +194,20 @@ func (s *DocumentService) Stats() map[string]interface{} {
 	}
 }
 
+// DeleteDoc removes a document from both the in-memory store and search index
+func (s *DocumentService) DeleteDoc(docID string) error {
+	if _, ok := s.docs[docID]; !ok {
+		return fmt.Errorf("document not found: %s", docID)
+	}
+	delete(s.docs, docID)
+	if s.useLocal {
+		s.local.DeleteByDocID(docID)
+	} else if s.indexer != nil {
+		s.indexer.DeleteByDocID(docID)
+	}
+	return nil
+}
+
 func (s *DocumentService) Mode() string {
 	if s.useLocal {
 		return "standalone (local search engine, zero dependencies)"
