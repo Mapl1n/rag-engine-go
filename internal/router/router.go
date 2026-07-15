@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log"
 	"rag-engine-go/internal/config"
 	"rag-engine-go/internal/handler"
 	"rag-engine-go/internal/service"
@@ -13,7 +14,6 @@ func Setup(cfg *config.Config) *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
-	// CORS
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
@@ -25,56 +25,51 @@ func Setup(cfg *config.Config) *gin.Engine {
 		c.Next()
 	})
 
-	// ── Initialize Services ──
 	parser := service.NewParserService(cfg.TikaURL)
 	chunker := service.NewChunkerService(cfg.ChunkSize, cfg.ChunkOverlap)
 	embedder := service.NewEmbedderService(cfg.OllamaURL, cfg.EmbeddingModel)
 	indexer, err := service.NewIndexerService(cfg)
 	if err != nil {
-		panic("ES: " + err.Error())
+		log.Printf("[WARN] ES unreachable at %s — search endpoints will return 503", cfg.ESURL())
 	}
 
-	// Auto-create ES index
-	if !indexer.IndexExists() {
-		indexer.CreateIndex()
+	if indexer != nil && !indexer.IndexExists() {
+		if err := indexer.CreateIndex(); err != nil {
+			log.Printf("[WARN] ES index creation failed: %v — search may fail for dense_vector queries", err)
+		}
 	}
 
-	searcher := service.NewSearcherService(indexer.ES(), cfg.ESIndex)
+	var searcher *service.SearcherService
+	if indexer != nil {
+		searcher = service.NewSearcherService(indexer.ES(), cfg.ESIndex)
+	}
+
 	qa := service.NewQAService(cfg.LLMProvider, cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
 	docService := service.NewDocumentService(parser, chunker, embedder, indexer, searcher, qa)
 
-	// ── Handlers ──
 	uploadH := handler.NewUploadHandler(docService)
 	searchH := handler.NewSearchHandler(docService)
 
-	// ── API Routes ──
 	api := r.Group("/api")
 	{
 		api.GET("/health", func(c *gin.Context) {
+			esOK := indexer != nil
 			c.JSON(200, gin.H{
-				"status":  "ok",
-				"tika":    parser.Health(),
-				"ollama":  embedder.Health(),
-				"qa":      qa.IsEnabled(),
+				"status": "ok",
+				"tika":   parser.Health(),
+				"ollama": embedder.Health(),
+				"es":     esOK,
+				"qa":     qa.IsEnabled(),
 			})
 		})
-
 		api.GET("/stats", uploadH.Stats)
-
-		// 文档上传
 		api.POST("/documents/upload", uploadH.Upload)
 		api.GET("/documents", uploadH.ListDocs)
-
-		// 检索
 		api.POST("/search", searchH.Search)
-
-		// 问答
 		api.POST("/qa", searchH.QA)
 		api.POST("/qa/stream", searchH.QAStream)
 	}
 
-	// ── Web UI ──
 	r.GET("/", serveUI)
-
 	return r
 }

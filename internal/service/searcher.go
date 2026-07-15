@@ -62,10 +62,8 @@ func (s *SearcherService) Search(query string, queryEmbedding []float32, topK in
 
 	var esResp struct {
 		Hits struct {
-			Total struct {
-				Value int `json:"value"`
-			} `json:"total"`
-			Hits []struct {
+			Total interface{} `json:"total"` // ES 7.x: int, ES 8.x: {"value": N}
+			Hits  []struct {
 				ID     string  `json:"_id"`
 				Score  float64 `json:"_score"`
 				Source struct {
@@ -101,7 +99,7 @@ func (s *SearcherService) Search(query string, queryEmbedding []float32, topK in
 
 	return &model.SearchResponse{
 		Results: results,
-		Total:   esResp.Hits.Total.Value,
+		Total:   parseESTotal(esResp.Hits.Total),
 		Took:    time.Since(start).Milliseconds(),
 		Query:   query,
 	}, nil
@@ -132,8 +130,13 @@ func (s *SearcherService) buildHybridQuery(query string, embedding []float32, do
 		})
 	}
 
-	boolQuery := map[string]interface{}{
-		"must": must,
+	boolQuery := map[string]interface{}{}
+
+	if len(must) > 0 {
+		boolQuery["must"] = must
+	} else {
+		// ES requires at least one clause — match_all if no query/doc filter
+		boolQuery["must"] = []interface{}{map[string]interface{}{"match_all": map[string]interface{}{}}}
 	}
 
 	// kNN 向量路径（如果有 embedding）
@@ -155,6 +158,19 @@ func (s *SearcherService) buildHybridQuery(query string, embedding []float32, do
 	}
 
 	return boolQuery
+}
+
+// parseESTotal 兼容 ES 7.x (int) 和 ES 8.x ({"value": N})
+func parseESTotal(total interface{}) int {
+	switch t := total.(type) {
+	case float64:
+		return int(t)
+	case map[string]interface{}:
+		if v, ok := t["value"].(float64); ok {
+			return int(v)
+		}
+	}
+	return 0
 }
 
 // KeywordSearch 纯 BM25 关键词搜索（降级模式）

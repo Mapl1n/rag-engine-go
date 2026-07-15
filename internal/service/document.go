@@ -99,10 +99,13 @@ func (s *DocumentService) ProcessDocument(file multipart.File, header *multipart
 
 // Search 语义检索
 func (s *DocumentService) Search(query string, topK int, docID string) (*model.SearchResponse, error) {
-	// 获取查询向量
+	if s.searcher == nil {
+		return nil, fmt.Errorf("ElasticSearch 未连接，无法搜索")
+	}
+
+	// 获取查询向量 (Ollama 不可用时降级为纯 BM25)
 	queryEmbedding, err := s.embedder.EmbedSingle(query)
 	if err != nil {
-		// 降级到纯 BM25
 		return s.searcher.KeywordSearch(query, topK)
 	}
 

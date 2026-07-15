@@ -1,13 +1,10 @@
 package service
 
 import (
-	"fmt"
-	"strings"
 	"unicode/utf8"
 )
 
 // ChunkerService — 文本智能分块
-// 策略: 按句子边界 + 字符滑动窗口 + overlap
 type ChunkerService struct {
 	chunkSize    int
 	chunkOverlap int
@@ -17,7 +14,6 @@ func NewChunkerService(chunkSize, chunkOverlap int) *ChunkerService {
 	return &ChunkerService{chunkSize: chunkSize, chunkOverlap: chunkOverlap}
 }
 
-// ChunkResult 分块结果
 type ChunkResult struct {
 	Text  string
 	Index int
@@ -29,81 +25,44 @@ func (s *ChunkerService) Split(text string) ([]ChunkResult, error) {
 		return []ChunkResult{{Text: text, Index: 0}}, nil
 	}
 
-	// 按段落分割
-	paragraphs := strings.Split(text, "\n")
 	var chunks []ChunkResult
-	var current strings.Builder
-	idx := 0
+	runes := []rune(text)
+	step := s.chunkSize - s.chunkOverlap
+	if step <= 0 {
+		step = s.chunkSize
+	}
 
-	flush := func() {
-		if current.Len() > 0 {
-			chunks = append(chunks, ChunkResult{
-				Text:  strings.TrimSpace(current.String()),
-				Index: idx,
-			})
-			idx++
-			current.Reset()
+	for i := 0; i < len(runes); i += step {
+		end := i + s.chunkSize
+		if end > len(runes) {
+			end = len(runes)
+		}
+		chunkText := string(runes[i:end])
+		chunks = append(chunks, ChunkResult{Text: chunkText, Index: len(chunks)})
+		if end >= len(runes) {
+			break
 		}
 	}
 
-	for _, para := range paragraphs {
-		para = strings.TrimSpace(para)
-		if para == "" {
-			flush()
-			continue
-		}
-
-		// 段落小于 chunk size 直接追加
-		if utf8.RuneCountInString(current.String())+utf8.RuneCountInString(para) <= s.chunkSize {
-			if current.Len() > 0 {
-				current.WriteString("\n")
-			}
-			current.WriteString(para)
-		} else {
-			// 当前段落过大，按句子拆分
-			flush()
-			sentences := splitSentences(para)
-			for _, sent := range sentences {
-				sent = strings.TrimSpace(sent)
-				if sent == "" {
-					continue
-				}
-				if utf8.RuneCountInString(current.String())+utf8.RuneCountInString(sent) <= s.chunkSize {
-					if current.Len() > 0 {
-						current.WriteString(" ")
-					}
-					current.WriteString(sent)
-				} else {
-					flush()
-					current.WriteString(sent)
-				}
-			}
-		}
-	}
-	flush()
-
-	// 添加 overlap 标记到 chunks
 	return chunks, nil
 }
 
-// splitSentences 简单按中英文标点分句
+// splitSentences — 按中英文标点分句
 func splitSentences(text string) []string {
 	var result []string
-	var current strings.Builder
+	var cur []rune
 
-	runes := []rune(text)
-	for i, r := range runes {
-		current.WriteRune(r)
-		// 中英文句末标点
+	for _, r := range []rune(text) {
+		cur = append(cur, r)
 		if r == '。' || r == '！' || r == '？' || r == '.' || r == '!' || r == '?' || r == '\n' {
-			// 检查是否为缩写点 (e.g. Mr.) — 简化处理
-			result = append(result, current.String())
-			current.Reset()
+			if len(cur) > 1 {
+				result = append(result, string(cur))
+			}
+			cur = nil
 		}
-		_ = i
 	}
-	if current.Len() > 0 {
-		result = append(result, current.String())
+	if len(cur) > 0 {
+		result = append(result, string(cur))
 	}
 	return result
 }
@@ -111,27 +70,35 @@ func splitSentences(text string) []string {
 // GetOverlapContext 获取 chunk 前后的 overlap 文本
 func (s *ChunkerService) GetOverlapContext(chunks []ChunkResult, idx int) string {
 	if s.chunkOverlap <= 0 || len(chunks) == 0 {
-		return ""
+		return chunks[idx].Text
 	}
-	var parts []string
+	if len(chunks) == 1 {
+		return chunks[0].Text
+	}
+
+	var result string
+
+	// 前一个 chunk 的尾部
 	if idx > 0 {
 		prev := chunks[idx-1].Text
 		if utf8.RuneCountInString(prev) > s.chunkOverlap {
-			runes := []rune(prev)
-			parts = append(parts, string(runes[len(runes)-s.chunkOverlap:]))
-		} else {
-			parts = append(parts, prev)
+			prevRunes := []rune(prev)
+			result += string(prevRunes[len(prevRunes)-s.chunkOverlap:]) + "\n---\n"
 		}
 	}
-	parts = append(parts, chunks[idx].Text)
+
+	// 当前 chunk
+	result += chunks[idx].Text
+
+	// 后一个 chunk 的头部
 	if idx < len(chunks)-1 {
 		next := chunks[idx+1].Text
+		result += "\n---\n"
 		if utf8.RuneCountInString(next) > s.chunkOverlap {
-			runes := []rune(next)
-			parts = append(parts, string(runes[:s.chunkOverlap]))
-		} else {
-			parts = append(parts, next)
+			nextRunes := []rune(next)
+			result += string(nextRunes[:s.chunkOverlap])
 		}
 	}
-	return fmt.Sprintf("%s\n---\n%s\n---\n%s", parts[0], chunks[idx].Text, parts[len(parts)-1])
+
+	return result
 }
