@@ -121,6 +121,32 @@ func (s *DocumentService) ProcessDocument(file multipart.File, header *multipart
 	return doc, nil
 }
 
+// ProcessText 直接索引纯文本（无需文件上传，用于 Pipeline 联动）
+func (s *DocumentService) ProcessText(text string, filename string) (*model.Document, error) {
+	docID := uuid.New().String()
+	if len(strings.TrimSpace(text)) == 0 {
+		return nil, fmt.Errorf("文本内容为空")
+	}
+
+	chunks, err := s.chunker.Split(text)
+	if err != nil {
+		return nil, fmt.Errorf("分块失败: %w", err)
+	}
+
+	doc := &model.Document{
+		ID: docID, Filename: filename, Size: int64(len(text)),
+		MimeType: "text/plain", Content: text, ChunkCount: len(chunks), CreatedAt: time.Now(),
+	}
+
+	if s.useLocal {
+		for i, c := range chunks {
+			s.local.IndexChunk(fmt.Sprintf("%s-%d", docID, i), docID, filename, c.Text, i)
+		}
+	}
+	s.docs[docID] = doc
+	return doc, nil
+}
+
 // Search 检索
 func (s *DocumentService) Search(query string, topK int, docID string) (*model.SearchResponse, error) {
 	if s.useLocal {

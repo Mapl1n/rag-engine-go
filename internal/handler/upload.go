@@ -75,6 +75,33 @@ func (h *UploadHandler) DeleteDoc(c *gin.Context) {
 	response.OK(c, gin.H{"message": "deleted"})
 }
 
+// UploadText 上传纯文本 → 直接索引（无需上传文件）
+func (h *UploadHandler) UploadText(c *gin.Context) {
+	var req struct {
+		Text     string `json:"text" binding:"required"`
+		Filename string `json:"filename"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请提供 text 字段")
+		return
+	}
+	if req.Filename == "" {
+		req.Filename = "untitled.txt"
+	}
+	doc, err := h.docService.ProcessText(req.Text, req.Filename)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{
+		"id":          doc.ID,
+		"filename":    doc.Filename,
+		"chunk_count": doc.ChunkCount,
+		"content_len": len(doc.Content),
+		"message":     "文本已索引",
+	})
+}
+
 // Stats 系统统计
 func (h *UploadHandler) Stats(c *gin.Context) {
 	response.OK(c, h.docService.Stats())

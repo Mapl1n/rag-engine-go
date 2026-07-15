@@ -64,6 +64,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		})
 		api.GET("/stats", uploadH.Stats)
 		api.POST("/documents/upload", uploadH.Upload)
+		api.POST("/documents/text", uploadH.UploadText)
 		api.GET("/documents", uploadH.ListDocs)
 		api.DELETE("/documents/:doc_id", uploadH.DeleteDoc)
 		api.POST("/search", searchH.Search)
