@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"rag-engine-go/internal/model"
+	"rag-engine-go/pkg/docparser"
 
 	"github.com/google/uuid"
 )
@@ -61,16 +62,22 @@ func NewDocumentService(
 func (s *DocumentService) ProcessDocument(file multipart.File, header *multipart.FileHeader) (*model.Document, error) {
 	docID := uuid.New().String()
 
-	// 1. 解析文本 (Tika 优先，纯文本兜底)
-	content, err := s.parser.Parse(file, header.Filename)
-	if err != nil || len(content) == 0 {
-		// 纯文本兜底
+	// 1. 读取原始文件数据
+	rawData, _ := io.ReadAll(file)
+
+	// 2. 本地解析器优先（纯Go PDF/DOCX/TXT）
+	content, err := docparser.Parse(rawData, header.Filename)
+	if err != nil {
+		// 本地解析失败 → 尝试 Tika
 		file.Seek(0, io.SeekStart)
-		raw, _ := io.ReadAll(file)
-		if isPlainText(raw) {
-			content = string(raw)
-		} else {
-			return nil, fmt.Errorf("无法解析该文档格式，请上传 .txt 纯文本文件或启动 Tika")
+		content, err = s.parser.Parse(file, header.Filename)
+		if err != nil || len(strings.TrimSpace(content)) < 10 {
+			// Tika 也不可用 → 尝试原始文本
+			if isPlainText(rawData) {
+				content = string(rawData)
+			} else {
+				return nil, fmt.Errorf("无法解析该文档: %v", err)
+			}
 		}
 	}
 	if len(content) == 0 {
