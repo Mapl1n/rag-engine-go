@@ -11,11 +11,11 @@ const ragUI = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>RAG Document Search</title>
+<title>RAG 文档问答引擎</title>
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#6366f1;--green:#22c55e;--red:#ef4444}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;justify-content:space-between;align-items:center}
 .header h1{font-size:18px}
 .status{font-size:12px;display:flex;gap:12px}
@@ -48,37 +48,37 @@ textarea{min-height:80px}
 </head>
 <body>
 <div class="header">
-  <h1>RAG Document Q&A Engine</h1>
-  <div id="statusBar" class="status"><span class="spinner"></span> checking...</div>
+  <h1>📚 RAG 文档问答引擎</h1>
+  <div id="statusBar" class="status"><span class="spinner"></span> 检测服务中...</div>
 </div>
 <div id="toast"></div>
 <div class="container">
   <div>
     <div class="card">
-      <h3>Upload Document</h3>
+      <h3>📤 上传文档</h3>
       <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <p style="font-size:24px;margin-bottom:8px">PDF</p>
-        <p>Upload PDF / DOCX / TXT</p>
-        <p style="font-size:11px;margin-top:4px">Auto parse -> chunk -> index</p>
+        <p style="font-size:24px;margin-bottom:8px">📄</p>
+        <p>点击或拖拽上传 PDF / DOCX / TXT</p>
+        <p style="font-size:11px;margin-top:4px">自动解析 → 分块 → 索引</p>
       </div>
       <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt" style="display:none" onchange="uploadFile()">
       <div id="uploadStatus" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
     </div>
     <div class="card">
-      <h3>Documents</h3>
+      <h3>📂 已上传文档</h3>
       <div id="docList" style="max-height:300px;overflow-y:auto"></div>
     </div>
   </div>
   <div>
     <div class="card">
-      <h3>Search & Q&A</h3>
-      <textarea id="queryInput" placeholder="Ask a question or enter keywords..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();search()}"></textarea>
+      <h3>🔍 语义检索与问答</h3>
+      <textarea id="queryInput" placeholder="输入关键词或问题，如：这份合同的有效期到什么时候？" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();search()}"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-primary" style="width:auto;flex:1" onclick="search()">Search</button>
-        <button class="btn btn-primary" style="width:auto;flex:1;background:var(--green)" onclick="qaStream()" id="qaBtn">AI Q&A</button>
+        <button class="btn btn-primary" style="width:auto;flex:1" onclick="search()">🔍 检索</button>
+        <button class="btn btn-primary" style="width:auto;flex:1;background:var(--green)" onclick="qaStream()" id="qaBtn">🤖 AI 问答</button>
       </div>
     </div>
-    <div id="resultsArea"><p style="text-align:center;color:var(--muted);margin:40px 0">Enter a query to search</p></div>
+    <div id="resultsArea"><p style="text-align:center;color:var(--muted);margin:40px 0">输入问题开始搜索</p></div>
   </div>
 </div>
 <script>
@@ -90,9 +90,9 @@ fetch(API+'/health').then(function(r){return r.json()}).then(function(d){
   status=d;
   var st=document.getElementById('statusBar');
   st.innerHTML='<span class="dot '+(d.tika?'dot-on':'dot-off')+'"></span> Tika <span class="dot '+(d.ollama?'dot-on':'dot-off')+'"></span> Ollama <span class="dot '+(d.qa?'dot-on':'dot-off')+'"></span> LLM';
-  if(!d.qa) document.getElementById('qaBtn').textContent='Q&A (no LLM)';
+  if(!d.qa) document.getElementById('qaBtn').textContent='🤖 问答(无LLM)';
   loadDocs();
-}).catch(function(){document.getElementById('statusBar').innerHTML='<span class="dot dot-off"></span> offline'});
+}).catch(function(){document.getElementById('statusBar').innerHTML='<span class="dot dot-off"></span> 服务离线'});
 
 var dz=document.getElementById('dropZone');
 dz.ondragover=function(e){e.preventDefault();dz.style.borderColor='var(--accent)'};
@@ -101,11 +101,11 @@ dz.ondrop=function(e){e.preventDefault();dz.style.borderColor='var(--border)';va
 function uploadFile(){var f=document.getElementById('fileInput').files[0];if(f)doUpload(f)}
 
 async function doUpload(file){
-  document.getElementById('uploadStatus').innerHTML='<span class="spinner"></span> Parsing...';
+  document.getElementById('uploadStatus').innerHTML='<span class="spinner"></span> 解析中...';
   var fd=new FormData();fd.append('file',file);
   try{
     var r=await fetch(API+'/documents/upload',{method:'POST',body:fd});var d=await r.json();
-    if(d.code===0){toast('Uploaded: '+d.data.chunk_count+' chunks','success');loadDocs()}
+    if(d.code===0){toast('上传成功: '+d.data.chunk_count+' 个文本块','success');loadDocs()}
     else{toast(d.message,'error')}
   }catch(e){toast(e.message,'error')}
   document.getElementById('uploadStatus').innerHTML='';
@@ -115,18 +115,18 @@ async function loadDocs(){
   try{
     var r=await fetch(API+'/documents');var docs=await r.json();
     var list=document.getElementById('docList');
-    if(!docs.data||docs.data.length===0){list.innerHTML='<p style="font-size:12px;color:var(--muted)">No documents</p>';return}
+    if(!docs.data||docs.data.length===0){list.innerHTML='<p style="font-size:12px;color:var(--muted)">暂无文档</p>';return}
     list.innerHTML=docs.data.map(function(d){
-      return '<div class="doc-item"><span>PDF '+d.filename+'<br><span style="color:var(--muted)">'+d.chunk_count+' chunks</span></span><button class="btn-danger" onclick="deleteDoc(\''+d.id+'\')">X</button></div>';
+      return '<div class="doc-item"><span>📄 '+d.filename+'<br><span style="color:var(--muted)">'+d.chunk_count+' 个分块</span></span><button class="btn-danger" onclick="deleteDoc(\''+d.id+'\')">删除</button></div>';
     }).join('');
   }catch(e){}
 }
 
 async function deleteDoc(docID){
-  if(!confirm('Delete this document?'))return;
+  if(!confirm('确认删除该文档？'))return;
   var r=await fetch(API+'/documents/'+docID,{method:'DELETE'});
   var d=await r.json();
-  if(d.code===0){toast('Deleted','success');loadDocs()}else{toast(d.message,'error')}
+  if(d.code===0){toast('已删除','success');loadDocs()}else{toast(d.message,'error')}
 }
 
 function highlight(text,query){
@@ -140,35 +140,33 @@ async function search(){
   var q=document.getElementById('queryInput').value.trim();
   if(!q)return;
   var area=document.getElementById('resultsArea');
-  area.innerHTML='<p style="text-align:center"><span class="spinner"></span> Searching...</p>';
+  area.innerHTML='<p style="text-align:center"><span class="spinner"></span> 语义检索中...</p>';
   try{
     var r=await fetch(API+'/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,top_k:5})});
     var d=await r.json();
     if(!d.data||!d.data.results||d.data.results.length===0){
-      area.innerHTML='<p style="text-align:center;color:var(--muted);margin:40px">No results found</p>';return
+      area.innerHTML='<p style="text-align:center;color:var(--muted);margin:40px">未找到相关内容<br><span style="font-size:12px">试试换个关键词或上传更多文档</span></p>';return
     }
-    area.innerHTML='<h4 style="margin-bottom:12px">'+d.data.total+' results ('+d.data.took_ms+'ms)</h4>'+
-      d.data.results.map(function(r){return'<div class="result-item"><div class="meta">PDF '+r.doc_name+' | score '+(r.score*100).toFixed(0)+'%</div><div class="text">'+highlight(r.text,q)+'</div></div>'}).join('');
-  }catch(e){area.innerHTML='<p style="color:var(--red)">Search failed: '+e.message+'</p>'}
+    area.innerHTML='<h4 style="margin-bottom:12px">找到 '+d.data.total+' 条结果 ('+d.data.took_ms+'ms)</h4>'+
+      d.data.results.map(function(r){return'<div class="result-item"><div class="meta">📄 '+r.doc_name+' | 相关度 '+(r.score*100).toFixed(0)+'%</div><div class="text">'+highlight(r.text,q)+'</div></div>'}).join('');
+  }catch(e){area.innerHTML='<p style="color:var(--red)">搜索失败: '+e.message+'</p>'}
 }
 
 async function qaStream(){
   var q=document.getElementById('queryInput').value.trim();
   if(!q)return;
   var area=document.getElementById('resultsArea');
-  area.innerHTML='<div class="answer-box" id="streamBox"><span class="spinner"></span> Thinking...</div><div id="sourceBox"></div>';
+  area.innerHTML='<div class="answer-box" id="streamBox"><span class="spinner"></span> 正在思考...</div><div id="sourceBox"></div>';
 
   if(!status.qa){
-    // No LLM: use sync QA endpoint
     try{
       var r=await fetch(API+'/qa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,top_k:5})});
       var d=await r.json();
       document.getElementById('streamBox').textContent=d.data.answer;
-    }catch(e){document.getElementById('streamBox').textContent='Error: '+e.message}
+    }catch(e){document.getElementById('streamBox').textContent='错误: '+e.message}
     return;
   }
 
-  // LLM streaming
   try{
     var r2=await fetch(API+'/qa/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,top_k:5})});
     var reader=r2.body.getReader();var decoder=new TextDecoder();
@@ -179,12 +177,12 @@ async function qaStream(){
       for(var i=0;i<lines.length;i++){
         if(lines[i].startsWith('data: ')){
           var data=lines[i].substring(6);
-          if(data==='[DONE]'){box.innerHTML+='<br><span style="color:var(--muted);font-size:11px">Done</span>';return}
+          if(data==='[DONE]'){box.innerHTML+='<br><span style="color:var(--muted);font-size:11px">回答完成</span>';return}
           try{box.innerHTML+=data.replace(/\\n/g,'<br>')}catch(e){box.innerHTML+=data}
         }
       }
     }
-  }catch(e){document.getElementById('streamBox').innerHTML='Error: '+e.message}
+  }catch(e){document.getElementById('streamBox').innerHTML='错误: '+e.message}
 }
 
 function toast(msg,type){
