@@ -1,0 +1,72 @@
+services:
+  # ElasticSearch 8.x — 全文检索 + 向量存储
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: rag-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:9200/_cluster/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Apache Tika — 文档解析（PDF/DOCX/HTML 等）
+  tika:
+    image: apache/tika:latest
+    container_name: rag-tika
+    ports:
+      - "9998:9998"
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:9998/tika"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Ollama — 本地运行 Embedding 模型（BGE-M3）
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # ollama pull bge-m3 需要在容器启动后手动执行
+
+  # Go RAG 引擎
+  app:
+    build: .
+    container_name: rag-app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      tika:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      - SERVER_PORT=8081
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - TIKA_URL=http://tika:9998
+      - OLLAMA_URL=http://ollama:11434
+      - EMBEDDING_MODEL=bge-m3
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434/v1}
+      - LLM_MODEL=${LLM_MODEL:-qwen2.5:7b}
+    restart: unless-stopped
+
+volumes:
+  es_data:
+  ollama_data:
