@@ -68,16 +68,11 @@ func (s *DocumentService) ProcessDocument(file multipart.File, header *multipart
 	// 2. 本地解析器优先（纯Go PDF/DOCX/TXT）
 	content, err := docparser.Parse(rawData, header.Filename)
 	if err != nil {
-		// 本地解析失败 → 尝试 Tika
-		file.Seek(0, io.SeekStart)
-		content, err = s.parser.Parse(file, header.Filename)
-		if err != nil || len(strings.TrimSpace(content)) < 10 {
-			// Tika 也不可用 → 尝试原始文本
-			if isPlainText(rawData) {
-				content = string(rawData)
-			} else {
-				return nil, fmt.Errorf("无法解析该文档: %v", err)
-			}
+		// 本地解析失败，尝试原始文本兜底
+		if isPlainText(rawData) {
+			content = string(rawData)
+		} else {
+			return nil, fmt.Errorf("无法解析该文档格式: %v", err)
 		}
 	}
 	if len(content) == 0 {
